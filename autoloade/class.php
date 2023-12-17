@@ -4,6 +4,6 @@ namespace MyNamespace;
 
 class MyClass {
     public function sayHello() {
-        echo "Hello from MyClass!\n";
+        echo "Hello from MyClass s!\n";
     }
 }
