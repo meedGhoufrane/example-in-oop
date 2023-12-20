@@ -3,143 +3,122 @@
 
 class DatabaseHandler
 {
-    private $mysqli;
+    private $pdo;
+
+    // public function __construct($servername, $username, $password, $dbname)
+    // {
+    //     $this->mysqli = new mysqli($servername, $username, $password, $dbname);
+
+    //     if ($this->mysqli->connect_error) {
+    //         die("Connection failed: " . $this->mysqli->connect_error);
+    //     }
+
+        
+    //     $this->mysqli->set_charset('utf8mb4');
+    // }
 
     public function __construct($servername, $username, $password, $dbname)
-    {
-        $this->mysqli = new mysqli($servername, $username, $password, $dbname);
+{
+    try {
+        $dsn = "mysql:host=$servername;dbname=$dbname;charset=utf8mb4";
 
-        if ($this->mysqli->connect_error) {
-            die("Connection failed: " . $this->mysqli->connect_error);
-        }
-
-        // Set charset to UTF-8 for proper handling of international characters
-        $this->mysqli->set_charset('utf8mb4');
+        $this->pdo = new PDO($dsn, $username, $password);
+    } catch (PDOException $e) {
+        die("Connection failed: " . $e->getMessage());
     }
+}
 
-    public function insertRecord($table, $data)
-    {
-        $columns = implode(',', array_keys($data));
-        $values = implode(',', array_fill(0, count($data), '?'));
 
-        $sql = "INSERT INTO $table($columns) VALUES($values)";
+public function insertRecord($table, $data)
+{
+    $columns = implode(',', array_keys($data));
+    $values = implode(',', array_fill(0, count($data), '?'));
 
-        $stmt = $this->mysqli->prepare($sql);
+    $sql = "INSERT INTO $table($columns) VALUES($values)";
 
-        if (!$stmt) {
-            die("Error in prepared statement: " . $this->mysqli->error);
-        }
+    try {
+        $stmt = $this->pdo->prepare($sql);
 
-        $types = str_repeat('s', count($data));
         $params = array_values($data);
-        $stmt->bind_param($types, ...$params);
+        $stmt->execute($params);
 
-        $result = $stmt->execute();
+        return true;
+    } catch (PDOException $e) {
+        die("Error in prepared statement: " . $e->getMessage());
+    }
+}
 
-        $stmt->close();
 
-        return $result;
+public function updateRecord($table, $data, $id)
+{
+    $args = array();
+    
+    foreach ($data as $key => $value) {
+        $args[] = "$key = :$key";
     }
 
-    public function updateRecord($table, $data, $id)
-    {
-        $args = array();
+    $setClause = implode(',', $args);
+    
+    $sql = "UPDATE $table SET $setClause WHERE id = :id";
+    
+    try {
+        $stmt = $this->pdo->prepare($sql);
 
         foreach ($data as $key => $value) {
-            $args[] = "$key = ?";
+            $stmt->bindValue(":$key", $value);
         }
 
-        $sql = "UPDATE $table SET " . implode(',', $args) . " WHERE id = ?";
-
-        $stmt = $this->mysqli->prepare($sql);
-
-        if (!$stmt) {
-            die("Error in prepared statement: " . $this->mysqli->error);
-        }
-
-        $types = str_repeat('s', count($data) + 1);
-        $params = array_values($data);
-        $params[] = $id;
-        $stmt->bind_param($types, ...$params);
+        $stmt->bindValue(":id", $id);
 
         $result = $stmt->execute();
 
-        $stmt->close();
-
         return $result;
+    } catch (PDOException $e) {
+        die("Error in prepared statement: " . $e->getMessage());
     }
+}
 
-    public function deleteRecord($table, $id)
-    {
-        $sql = "DELETE FROM $table WHERE id = ?";
 
-        $stmt = $this->mysqli->prepare($sql);
+public function deleteRecord($table, $id)
+{
+    $sql = "DELETE FROM $table WHERE id = :id";
 
-        if (!$stmt) {
-            die("Error in prepared statement: " . $this->mysqli->error);
-        }
-
-        $stmt->bind_param('i', $id);
-
+    try {
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
         $result = $stmt->execute();
 
-        $stmt->close();
-
         return $result;
+    } catch (PDOException $e) {
+        die("Error in prepared statement: " . $e->getMessage());
+    }
+}
+
+
+public function selectRecords($table, $columns = "*", $where = null)
+{
+    $sql = "SELECT $columns FROM $table";
+
+    if ($where !== null) {
+        $sql .= " WHERE $where";
     }
 
-    public function selectRecords($table, $columns = "*", $where = null)
-    {
-        $sql = "SELECT $columns FROM $table";
-
-        if ($where !== null) {
-            $sql .= " WHERE $where";
-        }
-
-        $stmt = $this->mysqli->prepare($sql);
-
-        if (!$stmt) {
-            die("Error in prepared statement: " . $this->mysqli->error);
-        }
-
+    try {
+        $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
 
-        $result = $stmt->get_result();
-
-        $stmt->close();
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         return $result;
+    } catch (PDOException $e) {
+        die("Error in prepared statement: " . $e->getMessage());
     }
+}
+
 
     public function closeConnection()
     {
-        $this->mysqli->close();
+        $this->pdo = null;
     }
 }
 
-// Usage example:
-
-// Create an instance of the DatabaseHandler class
-$databaseHandler = new DatabaseHandler('localhost', 'root', '', 'task_db');
-
-// Insert example
-$insertData = array('column1' => 'value1', 'column2' => 'value2');
-$databaseHandler->insertRecord('your_table', $insertData);
-
-// Update example
-$updateData = array('column1' => 'new_value1', 'column2' => 'new_value2');
-$databaseHandler->updateRecord('your_table', $updateData, 1);
-
-// Delete example
-$databaseHandler->deleteRecord('your_table', 1);
-
-// Select example
-$selectResult = $databaseHandler->selectRecords('your_table', 'column1, column2', 'column1 = "value1"');
-
-// Process select result if needed
-while ($row = $selectResult->fetch_assoc()) {
-    // Process each row
-}
-
-// Close the database connection
-$databaseHandler->closeConnection();
